@@ -6308,18 +6308,16 @@ namespace ts {
                         typeArguments = [];
                     }
 
-                    if (numTypeArguments < numTypeParameters) {
-                        // Map an unsatisfied type parameter with a default type.
-                        // If a type parameter does not have a default type, or if the default type
-                        // is a forward reference, the empty object type is used.
-                        for (let i = numTypeArguments; i < numTypeParameters; i++) {
-                            typeArguments[i] = getDefaultTypeArgumentType(isJavaScript);
-                        }
-                        for (let i = numTypeArguments; i < numTypeParameters; i++) {
-                            const mapper = createTypeMapper(typeParameters, typeArguments);
-                            const defaultType = getDefaultFromTypeParameter(typeParameters[i]);
-                            typeArguments[i] = defaultType ? instantiateType(defaultType, mapper) : getDefaultTypeArgumentType(isJavaScript);
-                        }
+                    // Map an unsatisfied type parameter with a default type.
+                    // If a type parameter does not have a default type, or if the default type
+                    // is a forward reference, the empty object type is used.
+                    for (let i = numTypeArguments; i < numTypeParameters; i++) {
+                        typeArguments[i] = getDefaultTypeArgumentType(isJavaScript);
+                    }
+                    for (let i = numTypeArguments; i < numTypeParameters; i++) {
+                        const mapper = createTypeMapper(typeParameters, typeArguments);
+                        const defaultType = getDefaultFromTypeParameter(typeParameters[i]);
+                        typeArguments[i] = defaultType ? instantiateType(defaultType, mapper) : getDefaultTypeArgumentType(isJavaScript);
                     }
                 }
             }
@@ -10591,7 +10589,6 @@ namespace ts {
         function getInferredType(context: InferenceContext, index: number): Type {
             const inference = context.inferences[index];
             let inferredType = inference.inferredType;
-            let inferredDefault = false;
             if (!inferredType) {
                 if (inference.candidates) {
                     // We widen inferred literal types if
@@ -10614,7 +10611,6 @@ namespace ts {
                     inferredType = silentNeverType;
                 }
                 else {
-                    inferredDefault = true;
                     // Infer either the default or the empty object type when no inferences were
                     // made. It is important to remember that in this case, inference still
                     // succeeds, meaning there is no error for not having inference candidates. An
@@ -10651,12 +10647,11 @@ namespace ts {
         }
 
         function getInferredTypes(context: InferenceContext): Type[] {
-            const typeArguments: Type[] = [];
+            const result: Type[] = [];
             for (let i = 0; i < context.inferences.length; i++) {
-                const inferredType = getInferredType(context, i);
-                typeArguments.push(inferredType);
+                result.push(getInferredType(context, i));
             }
-            return typeArguments;
+            return result;
         }
 
         // EXPRESSION TYPE CHECKING
@@ -15707,18 +15702,18 @@ namespace ts {
                     while (true) {
                         candidate = originalCandidate;
                         if (candidate.typeParameters) {
-                            let inferred: Type[];
+                            let typeArgumentTypes: Type[];
                             if (typeArguments) {
-                                inferred = fillMissingTypeArguments(map(typeArguments, getTypeFromTypeNode), candidate.typeParameters, getMinTypeArgumentCount(candidate.typeParameters));
-                                if (!checkTypeArguments(candidate, typeArguments, inferred, /*reportErrors*/ false)) {
+                                typeArgumentTypes = fillMissingTypeArguments(map(typeArguments, getTypeFromTypeNode), candidate.typeParameters, getMinTypeArgumentCount(candidate.typeParameters));
+                                if (!checkTypeArguments(candidate, typeArguments, typeArgumentTypes, /*reportErrors*/ false)) {
                                     candidateForTypeArgumentError = originalCandidate;
                                     break;
                                 }
                             }
                             else {
-                                inferred = inferTypeArguments(node, candidate, args, excludeArgument, inferenceContext);
+                                typeArgumentTypes = inferTypeArguments(node, candidate, args, excludeArgument, inferenceContext);
                             }
-                            candidate = getSignatureInstantiation(candidate, inferred);
+                            candidate = getSignatureInstantiation(candidate, typeArgumentTypes);
                         }
                         if (!checkApplicableSignature(node, args, candidate, relation, excludeArgument, /*reportErrors*/ false)) {
                             candidateForArgumentError = candidate;
@@ -16101,60 +16096,6 @@ namespace ts {
             links.resolvedSignature = flowLoopStart === flowLoopCount ? result : cached;
             return result;
         }
-
-        /*function getBestGuessSignature(node: CallLikeExpression, argumentCount: number): { best: Signature, candidates: Signature[], bestIndex: number } {
-            const candidates: Signature[] = [];
-            let best = getResolvedSignature(node, candidates);
-            if (candidates.length === 0) {
-                return { best: unknownSignature, candidates, bestIndex: -1 };
-            }
-
-            let bestIndex = candidates.indexOf(best);
-
-            // If best is not in candidates, resolution either failed or produced an instantiated signature.
-            if (bestIndex === -1) {
-                bestIndex = selectBestInvalidOverloadIndex(candidates, argumentCount);
-                // If resolution failed or the instatiated signature just filled in defaults for type arguments, don't use the result of `getResolvedSignature`.
-                if (best === unknownSignature || best.inferredAnyDefaultTypeArgument) {
-                    best = candidates[bestIndex];
-                }
-            }
-
-            // If we got a non-instantiated generic signature, see if we can still instantiate it if explicit type arguments were provided.
-            if (best.typeParameters && callLikeExpressionMayHaveTypeArguments(node) && node.typeArguments) {
-                const typeArguments = node.typeArguments.map(getTypeOfNode);
-                best = createSignatureInstantiation(best, { typeArguments, inferredAnyDefault: false });
-            }
-
-            return { best, candidates, bestIndex };
-        }
-
-        /**
-         * The selectedItemIndex could be negative for several reasons.
-         *     1. There are too many arguments for all of the overloads
-         *     2. None of the overloads were type compatible
-         * The solution here is to try to pick the best overload by picking
-         * either the first one that has an appropriate number of parameters,
-         * or the one with the most parameters.
-         *
-        function selectBestInvalidOverloadIndex(candidates: Signature[], argumentCount: number): number {
-            let maxParamsSignatureIndex = -1;
-            let maxParams = -1;
-            for (let i = 0; i < candidates.length; i++) {
-                const candidate = candidates[i];
-
-                if (candidate.hasRestParameter || candidate.parameters.length >= argumentCount) {
-                    return i;
-                }
-
-                if (candidate.parameters.length > maxParams) {
-                    maxParams = candidate.parameters.length;
-                    maxParamsSignatureIndex = i;
-                }
-            }
-
-            return maxParamsSignatureIndex;
-        }*/
 
         /**
          * Indicates whether a declaration can be treated as a constructor in a JavaScript
