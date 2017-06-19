@@ -15661,24 +15661,22 @@ namespace ts {
             // Pick the first candidate that matches the arity. This way we can get a contextual type for cases like:
             //  declare function f(a: { xa: number; xb: number; });
             //  f({ |
-            if (argumentCount !== undefined) {
-                if (candidates.length === 0) {
-                    return unknownSignature;
-                }
-
-                const bestIndex = getBestCandidateIndex();
-                let candidate = candidates[bestIndex]; //TODO:handle -1
+            if (!produceDiagnostics) {
+                Debug.assert(candidates.length > 0); // Else would have exited above.
+                const bestIndex = getBestCandidateIndex(argumentCount === undefined ? args.length : argumentCount); //argumentCount can be undefined. It's ok.
+                const candidate = candidates[bestIndex];
 
                 if (candidate.typeParameters && callLikeExpressionMayHaveTypeArguments(node) && node.typeArguments) {
                     const typeArguments = node.typeArguments.map(getTypeOfNode);
-                    candidate = createSignatureInstantiation(candidate, { typeArguments, inferredAnyDefault: false });
-                    candidates[bestIndex] = candidate;
+                    const instantiated = createSignatureInstantiation(candidate, { typeArguments, inferredAnyDefault: false });
+                    candidates[bestIndex] = instantiated;
+                    return instantiated;
                 }
 
                 return candidate;
             }
 
-            function getBestCandidateIndex() {
+            function getBestCandidateIndex(argsCount: number) {
                 //Debug.assert(argumentCount !== undefined); // Should always pass this from services. // Actually, possible that this is missing if using some other service.
 
                 let maxParamsIndex = -1;
@@ -15686,7 +15684,7 @@ namespace ts {
 
                 for (let i = 0; i < candidates.length; i++) {
                     const candidate = candidates[i];
-                    if (candidate.hasRestParameter || candidate.parameters.length >= argumentCount) {
+                    if (candidate.hasRestParameter || candidate.parameters.length >= argsCount) {
                         return i;
                     }
                     if (candidate.parameters.length > maxParams) {
