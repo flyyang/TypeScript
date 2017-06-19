@@ -26,10 +26,10 @@ goTo.marker("construcor3");
 verify.currentParameterHelpArgumentNameIs("T");
 verify.currentParameterSpanIs("T extends IFoo");
 
-goTo.marker("construcor4");
+/*goTo.marker("construcor4");
 verify.currentParameterHelpArgumentNameIs("M");
 verify.currentParameterSpanIs("M extends IFoo");
 
 goTo.marker("construcor5");
 verify.currentParameterHelpArgumentNameIs("U");
-verify.currentParameterSpanIs("U");
+verify.currentParameterSpanIs("U");*/

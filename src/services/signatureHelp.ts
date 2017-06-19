@@ -368,6 +368,8 @@ namespace ts.SignatureHelp {
 
             let isVariadic: boolean;
             if (isTypeParameterList) {
+                //!! We want the non-generic signature here!!!
+
                 isVariadic = false; // type parameter lists are not variadic
                 prefixDisplayParts.push(punctuationPart(SyntaxKind.LessThanToken));
                 const typeParameters = candidateSignature.typeParameters;

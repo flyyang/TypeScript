@@ -7982,6 +7982,7 @@ namespace ts {
         }
 
         function createTypeMapper(sources: Type[], targets: Type[]): TypeMapper {
+            Debug.assert(targets === undefined || sources.length === targets.length);
             const mapper: TypeMapper = sources.length === 1 ? makeUnaryTypeMapper(sources[0], targets ? targets[0] : anyType) :
                 sources.length === 2 ? makeBinaryTypeMapper(sources[0], targets ? targets[0] : anyType, sources[1], targets ? targets[1] : anyType) :
                     makeArrayTypeMapper(sources, targets);
@@ -15666,8 +15667,16 @@ namespace ts {
                 const bestIndex = getBestCandidateIndex(argumentCount === undefined ? args.length : argumentCount); //argumentCount can be undefined. It's ok.
                 const candidate = candidates[bestIndex];
 
-                if (candidate.typeParameters && callLikeExpressionMayHaveTypeArguments(node) && node.typeArguments) {
-                    const typeArguments = node.typeArguments.map(getTypeOfNode);
+                const { typeParameters } = candidate;
+                if (typeParameters && callLikeExpressionMayHaveTypeArguments(node) && node.typeArguments) {
+                    let typeArguments = node.typeArguments.map(getTypeOfNode);
+                    while (typeArguments.length > typeParameters.length) {
+                        typeArguments.pop();
+                    }
+                    while (typeArguments.length < typeParameters.length) {
+                        typeArguments.push(getDefaultTypeArgumentType(isInJavaScriptFile(node)));
+                    }
+
                     const instantiated = createSignatureInstantiation(candidate, { typeArguments, inferredAnyDefault: false });
                     candidates[bestIndex] = instantiated;
                     return instantiated;
