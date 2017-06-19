@@ -3381,7 +3381,7 @@ namespace ts {
     /* @internal */
     export interface TypeMapper {
         (t: TypeParameter): Type;
-        mappedTypes?: Type[];       // Types mapped by this mapper
+        mappedTypes?: TypeParameter[];       // Types mapped by this mapper
         instantiations?: Type[];    // Cache of instantiations created using this type mapper.
     }
 

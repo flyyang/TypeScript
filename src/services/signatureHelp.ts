@@ -37,7 +37,7 @@ namespace ts.SignatureHelp {
         // Semantic filtering of signature help
         const call = argumentInfo.invocation;
         const candidates: Signature[] = [];
-        const best = typeChecker.getResolvedSignature(call, candidates, argumentInfo.argumentCount); //.getBestGuessSignature(call, argumentInfo.argumentCount);
+        const best = typeChecker.getResolvedSignature(call, candidates, argumentInfo.argumentCount);
         cancellationToken.throwIfCancellationRequested();
 
         if (!candidates.length) {
@@ -372,7 +372,7 @@ namespace ts.SignatureHelp {
 
                 isVariadic = false; // type parameter lists are not variadic
                 prefixDisplayParts.push(punctuationPart(SyntaxKind.LessThanToken));
-                const typeParameters = candidateSignature.typeParameters;
+                const typeParameters = candidateSignature.mapper ? candidateSignature.mapper.mappedTypes : candidateSignature.typeParameters;
                 signatureHelpParameters = typeParameters && typeParameters.length > 0 ? map(typeParameters, createSignatureHelpParameterForTypeParameter) : emptyArray;
                 suffixDisplayParts.push(punctuationPart(SyntaxKind.GreaterThanToken));
                 const parameterParts = mapToDisplayParts(writer =>

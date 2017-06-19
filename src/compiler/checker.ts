@@ -7981,7 +7981,7 @@ namespace ts {
             };
         }
 
-        function createTypeMapper(sources: Type[], targets: Type[]): TypeMapper {
+        function createTypeMapper(sources: TypeParameter[], targets: Type[]): TypeMapper {
             Debug.assert(targets === undefined || sources.length === targets.length);
             const mapper: TypeMapper = sources.length === 1 ? makeUnaryTypeMapper(sources[0], targets ? targets[0] : anyType) :
                 sources.length === 2 ? makeBinaryTypeMapper(sources[0], targets ? targets[0] : anyType, sources[1], targets ? targets[1] : anyType) :
@@ -7990,7 +7990,7 @@ namespace ts {
             return mapper;
         }
 
-        function createTypeEraser(sources: Type[]): TypeMapper {
+        function createTypeEraser(sources: TypeParameter[]): TypeMapper {
             return createTypeMapper(sources, /*targets*/ undefined);
         }
 
