@@ -16,7 +16,7 @@ namespace ts.SignatureHelp {
         argumentsSpan: TextSpan;
         argumentIndex?: number;
         /** argumentCount is the *apparent* number of arguments. */
-        argumentCount: number;
+        argumentCount: number; //kill
     }
 
     export function getSignatureHelpItems(program: Program, sourceFile: SourceFile, position: number, cancellationToken: CancellationToken): SignatureHelpItems {
@@ -36,7 +36,8 @@ namespace ts.SignatureHelp {
 
         // Semantic filtering of signature help
         const call = argumentInfo.invocation;
-        const { best, candidates, bestIndex } = typeChecker.getBestGuessSignature(call, argumentInfo.argumentCount);
+        const candidates: Signature[] = [];
+        const best = typeChecker.getResolvedSignature(call, candidates, argumentInfo.argumentCount); //.getBestGuessSignature(call, argumentInfo.argumentCount);
         cancellationToken.throwIfCancellationRequested();
 
         if (!candidates.length) {
@@ -49,7 +50,7 @@ namespace ts.SignatureHelp {
             return undefined;
         }
 
-        return createSignatureHelpItems(candidates, best, bestIndex, argumentInfo, typeChecker);
+        return createSignatureHelpItems(candidates, best, argumentInfo, typeChecker);
     }
 
     function createJavaScriptSignatureHelpItems(argumentInfo: ArgumentListInfo, program: Program): SignatureHelpItems {
@@ -83,7 +84,7 @@ namespace ts.SignatureHelp {
                         if (type) {
                             const callSignatures = type.getCallSignatures();
                             if (callSignatures && callSignatures.length) {
-                                return createSignatureHelpItems(callSignatures, callSignatures[0], 0, argumentInfo, typeChecker);
+                                return createSignatureHelpItems(callSignatures, callSignatures[0], argumentInfo, typeChecker);
                             }
                         }
                     }
@@ -276,8 +277,8 @@ namespace ts.SignatureHelp {
             kind: ArgumentListKind.TaggedTemplateArguments,
             invocation: tagExpression,
             argumentsSpan: getApplicableSpanForTaggedTemplate(tagExpression, sourceFile),
-            argumentIndex: argumentIndex,
-            argumentCount: argumentCount
+            argumentIndex,
+            argumentCount
         };
     }
 
@@ -349,7 +350,7 @@ namespace ts.SignatureHelp {
         return children[indexOfOpenerToken + 1];
     }
 
-    function createSignatureHelpItems(candidates: Signature[], bestSignature: Signature, bestIndex: number, argumentListInfo: ArgumentListInfo, typeChecker: TypeChecker): SignatureHelpItems {
+    function createSignatureHelpItems(candidates: Signature[], bestSignature: Signature, argumentListInfo: ArgumentListInfo, typeChecker: TypeChecker): SignatureHelpItems {
         const { argumentCount, argumentsSpan: applicableSpan, invocation, argumentIndex } = argumentListInfo;
         const isTypeParameterList = argumentListInfo.kind === ArgumentListKind.TypeArguments;
 
@@ -406,6 +407,9 @@ namespace ts.SignatureHelp {
         });
 
         Debug.assert(argumentIndex === 0 || argumentIndex < argumentCount, `argumentCount < argumentIndex, ${argumentCount} < ${argumentIndex}`);
+
+        const bestIndex = candidates.indexOf(bestSignature);
+        Debug.assert(bestIndex !== -1); // If candidates is non-empty it should always include bestSignature. We check for an empty candidates before calling this function.
 
         return {
             items,

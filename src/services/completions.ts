@@ -228,19 +228,11 @@ namespace ts.Completions {
         const entries: CompletionEntry[] = [];
         const uniques = createMap<true>();
 
-        const { best, candidates, bestIndex } = typeChecker.getBestGuessSignature(argumentInfo.invocation, argumentInfo.argumentCount);
+        const candidates: Signature[] = [];
+        typeChecker.getResolvedSignature(argumentInfo.invocation, candidates, argumentInfo.argumentCount);
 
-        // resolvedSignature may be an instantiated generic signature, while the associated candidate will still be generic.
-        addCompletionsForSignature(best);
-
-        candidates.forEach((candidate, index) => {
-            if (index !== bestIndex) {
-                addCompletionsForSignature(candidate);
-            }
-        });
-
-        function addCompletionsForSignature(sig: Signature): void {
-            const type = typeChecker.getParameterType(sig, argumentInfo.argumentIndex);
+        for (const candidate of candidates) {
+            const type = typeChecker.getParameterType(candidate, argumentInfo.argumentIndex);
             addStringLiteralCompletionsFromType(type, entries, typeChecker, uniques);
         }
 

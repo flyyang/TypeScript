@@ -69,6 +69,9 @@ namespace ts {
         undefinedSymbol.declarations = [];
         const argumentsSymbol = createSymbol(SymbolFlags.Property, "arguments");
 
+        //!
+        let argumentCount: number | undefined;
+
         // for public members that accept a Node or one of its subtypes, we must guard against
         // synthetic nodes created during transformations by calling `getParseTreeNode`.
         // for most of these, we perform the guard only on `checker` to avoid any possible
@@ -151,16 +154,15 @@ namespace ts {
             getRootSymbols,
             getContextualType: node => {
                 node = getParseTreeNode(node, isExpression);
-                return node ? getContextualType(node, /*bestGuessForSignature*/ true) : undefined;
+                return node ? getContextualType(node) : undefined;
             },
             getFullyQualifiedName,
-            getResolvedSignature: (node, candidatesOutArray?) => {
+            getResolvedSignature: (node, candidatesOutArray, theArgumentCount) => {
                 node = getParseTreeNode(node, isCallLikeExpression);
-                return node ? getResolvedSignature(node, candidatesOutArray) : undefined;
-            },
-            getBestGuessSignature: (node, apparentArgumentCount) => {
-                node = getParseTreeNode(node, isCallLikeExpression);
-                return node ? getBestGuessSignature(node, apparentArgumentCount) : undefined;
+                argumentCount = theArgumentCount;
+                const res = node ? getResolvedSignature(node, candidatesOutArray) : undefined;
+                argumentCount = undefined;
+                return res;
             },
             getConstantValue: node => {
                 node = getParseTreeNode(node, canHaveConstantValue);
@@ -12808,17 +12810,13 @@ namespace ts {
         }
 
         // In a typed function call, an argument or substitution expression is contextually typed by the type of the corresponding parameter.
-        function getContextualTypeForArgument(callTarget: CallLikeExpression, arg: Expression, bestGuessForSignature?: boolean): Type {
+        function getContextualTypeForArgument(callTarget: CallLikeExpression, arg: Expression): Type {
             const args = getEffectiveCallArguments(callTarget);
             const argIndex = indexOf(args, arg);
             if (argIndex >= 0) {
                 // If we're already in the process of resolving the given signature, don't resolve again as
                 // that could cause infinite recursion. Instead, return anySignature.
-                const signature = getNodeLinks(callTarget).resolvedSignature === resolvingSignature
-                    ? resolvingSignature
-                    : bestGuessForSignature
-                        ? getBestGuessSignature(callTarget, args.length).best
-                        : getResolvedSignature(callTarget);
+                const signature = getNodeLinks(callTarget).resolvedSignature === resolvingSignature ? resolvingSignature : getResolvedSignature(callTarget);
                 return getTypeAtPosition(signature, argIndex);
             }
             return undefined;
@@ -13008,7 +13006,7 @@ namespace ts {
          * @param node the expression whose contextual type will be returned.
          * @returns the contextual type of an expression.
          */
-        function getContextualType(node: Expression, bestGuessForSignature?: boolean): Type | undefined {
+        function getContextualType(node: Expression): Type | undefined {
             if (isInsideWithStatementBody(node)) {
                 // We cannot answer semantic questions within a with block, do not proceed any further
                 return undefined;
@@ -13031,7 +13029,7 @@ namespace ts {
                     return getContextualTypeForYieldOperand(<YieldExpression>parent);
                 case SyntaxKind.CallExpression:
                 case SyntaxKind.NewExpression:
-                    return getContextualTypeForArgument(<CallExpression>parent, node, bestGuessForSignature);
+                    return getContextualTypeForArgument(<CallExpression>parent, node);
                 case SyntaxKind.TypeAssertionExpression:
                 case SyntaxKind.AsExpression:
                     return getTypeFromTypeNode((<AssertionExpression>parent).type);
@@ -15663,15 +15661,41 @@ namespace ts {
             // Pick the first candidate that matches the arity. This way we can get a contextual type for cases like:
             //  declare function f(a: { xa: number; xb: number; });
             //  f({ |
-            if (!produceDiagnostics) {
-                for (let candidate of candidates) {
-                    if (hasCorrectArity(node, args, candidate)) {
-                        if (candidate.typeParameters && typeArguments) {
-                            candidate = getSignatureInstantiation(candidate, map(typeArguments, getTypeFromTypeNode));
-                        }
-                        return candidate;
+            if (argumentCount !== undefined) {
+                if (candidates.length === 0) {
+                    return unknownSignature;
+                }
+
+                const bestIndex = getBestCandidateIndex();
+                let candidate = candidates[bestIndex]; //TODO:handle -1
+
+                if (candidate.typeParameters && callLikeExpressionMayHaveTypeArguments(node) && node.typeArguments) {
+                    const typeArguments = node.typeArguments.map(getTypeOfNode);
+                    candidate = createSignatureInstantiation(candidate, { typeArguments, inferredAnyDefault: false });
+                    candidates[bestIndex] = candidate;
+                }
+
+                return candidate;
+            }
+
+            function getBestCandidateIndex() {
+                //Debug.assert(argumentCount !== undefined); // Should always pass this from services. // Actually, possible that this is missing if using some other service.
+
+                let maxParamsIndex = -1;
+                let maxParams = -1;
+
+                for (let i = 0; i < candidates.length; i++) {
+                    const candidate = candidates[i];
+                    if (candidate.hasRestParameter || candidate.parameters.length >= argumentCount) {
+                        return i;
+                    }
+                    if (candidate.parameters.length > maxParams) {
+                        maxParams = candidate.parameters.length;
+                        maxParamsIndex = i;
                     }
                 }
+
+                return maxParamsIndex;
             }
 
             return resolveErrorCall(node);
@@ -15679,7 +15703,8 @@ namespace ts {
             function chooseOverload(candidates: Signature[], relation: Map<RelationComparisonResult>, signatureHelpTrailingComma = false) {
                 candidateForArgumentError = undefined;
                 candidateForTypeArgumentError = undefined;
-                for (const originalCandidate of candidates) {
+                for (let candidatesIndex = 0; candidatesIndex < candidates.length; candidatesIndex++) {
+                    const originalCandidate = candidates[candidatesIndex];
                     if (!hasCorrectArity(node, args, originalCandidate, signatureHelpTrailingComma)) {
                         continue;
                     }
@@ -15711,6 +15736,7 @@ namespace ts {
                         }
                         const index = excludeArgument ? indexOf(excludeArgument, /*value*/ true) : -1;
                         if (index < 0) {
+                            candidates[candidatesIndex] = candidate;
                             return candidate;
                         }
                         excludeArgument[index] = false;
@@ -16036,9 +16062,7 @@ namespace ts {
 
             const callSignatures = elementType && getSignaturesOfType(elementType, SignatureKind.Call);
             if (callSignatures && callSignatures.length > 0) {
-                let callSignature: Signature;
-                callSignature = resolveCall(openingLikeElement, callSignatures, candidatesOutArray);
-                return callSignature;
+                return resolveCall(openingLikeElement, callSignatures, candidatesOutArray);
             }
 
             return undefined;
@@ -16088,7 +16112,7 @@ namespace ts {
             return result;
         }
 
-        function getBestGuessSignature(node: CallLikeExpression, argumentCount: number): { best: Signature, candidates: Signature[], bestIndex: number } {
+        /*function getBestGuessSignature(node: CallLikeExpression, argumentCount: number): { best: Signature, candidates: Signature[], bestIndex: number } {
             const candidates: Signature[] = [];
             let best = getResolvedSignature(node, candidates);
             if (candidates.length === 0) {
@@ -16122,7 +16146,7 @@ namespace ts {
          * The solution here is to try to pick the best overload by picking
          * either the first one that has an appropriate number of parameters,
          * or the one with the most parameters.
-         */
+         *
         function selectBestInvalidOverloadIndex(candidates: Signature[], argumentCount: number): number {
             let maxParamsSignatureIndex = -1;
             let maxParams = -1;
@@ -16140,7 +16164,7 @@ namespace ts {
             }
 
             return maxParamsSignatureIndex;
-        }
+        }*/
 
         /**
          * Indicates whether a declaration can be treated as a constructor in a JavaScript
