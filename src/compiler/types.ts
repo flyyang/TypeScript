@@ -2584,7 +2584,7 @@ namespace ts {
         getContextualType(node: Expression): Type | undefined;
         /**
          * returns unknownSignature in the case of an error. Don't know when it returns undefined.
-         * @param argumentCount Apparent number of arguments, passed in case of a possibly incomplete call.
+         * @param argumentCount Apparent number of arguments, passed in case of a possibly incomplete call. This should come from an ArgumentListInfo. See `signatureHelp.ts`.
          */
         getResolvedSignature(node: CallLikeExpression, candidatesOutArray?: Signature[], argumentCount?: number): Signature | undefined;
         getSignatureFromDeclaration(declaration: SignatureDeclaration): Signature | undefined;

@@ -357,7 +357,7 @@ namespace ts.SignatureHelp {
         const callTarget = getInvokedExpression(invocation);
         const callTargetSymbol = typeChecker.getSymbolAtLocation(callTarget);
         const callTargetDisplayParts = callTargetSymbol && symbolToDisplayParts(typeChecker, callTargetSymbol, /*enclosingDeclaration*/ undefined, /*meaning*/ undefined);
-        const items: SignatureHelpItem[] = map(candidates, (candidateSignature, index) => {
+        const items: SignatureHelpItem[] = map(candidates, candidateSignature => {
             let signatureHelpParameters: SignatureHelpParameter[];
             const prefixDisplayParts: SymbolDisplayPart[] = [];
             const suffixDisplayParts: SymbolDisplayPart[] = [];

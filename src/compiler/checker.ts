@@ -69,8 +69,8 @@ namespace ts {
         undefinedSymbol.declarations = [];
         const argumentsSymbol = createSymbol(SymbolFlags.Property, "arguments");
 
-        //!
-        let argumentCount: number | undefined;
+        /** This will be set during calls to `getResolvedSignature` where services determines an apparent number of arguments greater than what is actually provided. */
+        let apparentArgumentCount: number | undefined;
 
         // for public members that accept a Node or one of its subtypes, we must guard against
         // synthetic nodes created during transformations by calling `getParseTreeNode`.
@@ -159,9 +159,9 @@ namespace ts {
             getFullyQualifiedName,
             getResolvedSignature: (node, candidatesOutArray, theArgumentCount) => {
                 node = getParseTreeNode(node, isCallLikeExpression);
-                argumentCount = theArgumentCount;
+                apparentArgumentCount = theArgumentCount;
                 const res = node ? getResolvedSignature(node, candidatesOutArray) : undefined;
-                argumentCount = undefined;
+                apparentArgumentCount = undefined;
                 return res;
             },
             getConstantValue: node => {
@@ -15643,12 +15643,12 @@ namespace ts {
             //  f({ |
             if (!produceDiagnostics) {
                 Debug.assert(candidates.length > 0); // Else would have exited above.
-                const bestIndex = getBestCandidateIndex(candidates, argumentCount === undefined ? args.length : argumentCount); //argumentCount can be undefined. It's ok.
+                const bestIndex = getBestCandidateIndex(candidates, apparentArgumentCount === undefined ? args.length : apparentArgumentCount);
                 const candidate = candidates[bestIndex];
 
                 const { typeParameters } = candidate;
                 if (typeParameters && callLikeExpressionMayHaveTypeArguments(node) && node.typeArguments) {
-                    let typeArguments = node.typeArguments.map(getTypeOfNode);
+                    const typeArguments = node.typeArguments.map(getTypeOfNode);
                     while (typeArguments.length > typeParameters.length) {
                         typeArguments.pop();
                     }
