@@ -16,7 +16,7 @@ namespace ts.SignatureHelp {
         argumentsSpan: TextSpan;
         argumentIndex?: number;
         /** argumentCount is the *apparent* number of arguments. */
-        argumentCount: number; //kill
+        argumentCount: number;
     }
 
     export function getSignatureHelpItems(program: Program, sourceFile: SourceFile, position: number, cancellationToken: CancellationToken): SignatureHelpItems {
@@ -37,7 +37,7 @@ namespace ts.SignatureHelp {
         // Semantic filtering of signature help
         const call = argumentInfo.invocation;
         const candidates: Signature[] = [];
-        const best = typeChecker.getResolvedSignature(call, candidates, argumentInfo.argumentCount);
+        const resolvedSignature = typeChecker.getResolvedSignature(call, candidates, argumentInfo.argumentCount);
         cancellationToken.throwIfCancellationRequested();
 
         if (!candidates.length) {
@@ -50,7 +50,7 @@ namespace ts.SignatureHelp {
             return undefined;
         }
 
-        return createSignatureHelpItems(candidates, best, argumentInfo, typeChecker);
+        return createSignatureHelpItems(candidates, resolvedSignature, argumentInfo, typeChecker);
     }
 
     function createJavaScriptSignatureHelpItems(argumentInfo: ArgumentListInfo, program: Program): SignatureHelpItems {
@@ -350,7 +350,7 @@ namespace ts.SignatureHelp {
         return children[indexOfOpenerToken + 1];
     }
 
-    function createSignatureHelpItems(candidates: Signature[], bestSignature: Signature, argumentListInfo: ArgumentListInfo, typeChecker: TypeChecker): SignatureHelpItems {
+    function createSignatureHelpItems(candidates: Signature[], resolvedSignature: Signature, argumentListInfo: ArgumentListInfo, typeChecker: TypeChecker): SignatureHelpItems {
         const { argumentCount, argumentsSpan: applicableSpan, invocation, argumentIndex } = argumentListInfo;
         const isTypeParameterList = argumentListInfo.kind === ArgumentListKind.TypeArguments;
 
@@ -368,10 +368,9 @@ namespace ts.SignatureHelp {
 
             let isVariadic: boolean;
             if (isTypeParameterList) {
-                //!! We want the non-generic signature here!!!
-
                 isVariadic = false; // type parameter lists are not variadic
                 prefixDisplayParts.push(punctuationPart(SyntaxKind.LessThanToken));
+                // Use `.mapper` to ensure we get the generic type arguments even if this is an instantiated version of the signature.
                 const typeParameters = candidateSignature.mapper ? candidateSignature.mapper.mappedTypes : candidateSignature.typeParameters;
                 signatureHelpParameters = typeParameters && typeParameters.length > 0 ? map(typeParameters, createSignatureHelpParameterForTypeParameter) : emptyArray;
                 suffixDisplayParts.push(punctuationPart(SyntaxKind.GreaterThanToken));
@@ -380,9 +379,6 @@ namespace ts.SignatureHelp {
                 addRange(suffixDisplayParts, parameterParts);
             }
             else {
-                // `bestSignature` may be instantiated, so use that instead of the generic `candidateSignature`.
-                if (index === bestIndex) candidateSignature = bestSignature;
-
                 isVariadic = candidateSignature.hasRestParameter;
                 const typeParameterParts = mapToDisplayParts(writer =>
                     typeChecker.getSymbolDisplayBuilder().buildDisplayForTypeParametersAndDelimiters(candidateSignature.typeParameters, writer, invocation));
@@ -410,16 +406,10 @@ namespace ts.SignatureHelp {
 
         Debug.assert(argumentIndex === 0 || argumentIndex < argumentCount, `argumentCount < argumentIndex, ${argumentCount} < ${argumentIndex}`);
 
-        const bestIndex = candidates.indexOf(bestSignature);
-        Debug.assert(bestIndex !== -1); // If candidates is non-empty it should always include bestSignature. We check for an empty candidates before calling this function.
+        const selectedItemIndex = candidates.indexOf(resolvedSignature);
+        Debug.assert(selectedItemIndex !== -1); // If candidates is non-empty it should always include bestSignature. We check for an empty candidates before calling this function.
 
-        return {
-            items,
-            applicableSpan,
-            selectedItemIndex: bestIndex,
-            argumentIndex,
-            argumentCount
-        };
+        return { items, applicableSpan, selectedItemIndex, argumentIndex, argumentCount };
 
         function createSignatureHelpParameterForParameter(parameter: Symbol): SignatureHelpParameter {
             const displayParts = mapToDisplayParts(writer =>

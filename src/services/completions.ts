@@ -225,15 +225,14 @@ namespace ts.Completions {
     }
 
     function getStringLiteralCompletionEntriesFromCallExpression(argumentInfo: SignatureHelp.ArgumentListInfo, typeChecker: TypeChecker): CompletionInfo | undefined {
+        const candidates: Signature[] = [];
         const entries: CompletionEntry[] = [];
         const uniques = createMap<true>();
 
-        const candidates: Signature[] = [];
         typeChecker.getResolvedSignature(argumentInfo.invocation, candidates, argumentInfo.argumentCount);
 
         for (const candidate of candidates) {
-            const type = typeChecker.getParameterType(candidate, argumentInfo.argumentIndex);
-            addStringLiteralCompletionsFromType(type, entries, typeChecker, uniques);
+            addStringLiteralCompletionsFromType(typeChecker.getParameterType(candidate, argumentInfo.argumentIndex), entries, typeChecker, uniques);
         }
 
         if (entries.length) {

@@ -6298,7 +6298,7 @@ namespace ts {
          * @param typeParameters The requested type parameters.
          * @param minTypeArgumentCount The minimum number of required type arguments.
          */
-        function fillMissingTypeArguments(typeArguments: Type[] | undefined, typeParameters: TypeParameter[] | undefined, minTypeArgumentCount: number, location?: Node): Type[] {
+        function fillMissingTypeArguments(typeArguments: Type[] | undefined, typeParameters: TypeParameter[] | undefined, minTypeArgumentCount: number, location?: Node) {
             const numTypeParameters = length(typeParameters);
             if (numTypeParameters) {
                 const numTypeArguments = length(typeArguments);
@@ -13727,7 +13727,8 @@ namespace ts {
             const instantiatedSignatures = [];
             for (const signature of signatures) {
                 if (signature.typeParameters) {
-                    instantiatedSignatures.push(getSignatureInstantiation(signature, fillMissingTypeArguments(/*typeArguments*/ undefined, signature.typeParameters, /*minTypeArgumentCount*/ 0)));
+                    const typeArguments = fillMissingTypeArguments(/*typeArguments*/ undefined, signature.typeParameters, /*minTypeArgumentCount*/ 0);
+                    instantiatedSignatures.push(getSignatureInstantiation(signature, typeArguments));
                 }
                 else {
                     instantiatedSignatures.push(signature);
@@ -15642,7 +15643,7 @@ namespace ts {
             //  f({ |
             if (!produceDiagnostics) {
                 Debug.assert(candidates.length > 0); // Else would have exited above.
-                const bestIndex = getBestCandidateIndex(argumentCount === undefined ? args.length : argumentCount); //argumentCount can be undefined. It's ok.
+                const bestIndex = getBestCandidateIndex(candidates, argumentCount === undefined ? args.length : argumentCount); //argumentCount can be undefined. It's ok.
                 const candidate = candidates[bestIndex];
 
                 const { typeParameters } = candidate;
@@ -15663,33 +15664,13 @@ namespace ts {
                 return candidate;
             }
 
-            function getBestCandidateIndex(argsCount: number) {
-                //Debug.assert(argumentCount !== undefined); // Should always pass this from services. // Actually, possible that this is missing if using some other service.
-
-                let maxParamsIndex = -1;
-                let maxParams = -1;
-
-                for (let i = 0; i < candidates.length; i++) {
-                    const candidate = candidates[i];
-                    if (candidate.hasRestParameter || candidate.parameters.length >= argsCount) {
-                        return i;
-                    }
-                    if (candidate.parameters.length > maxParams) {
-                        maxParams = candidate.parameters.length;
-                        maxParamsIndex = i;
-                    }
-                }
-
-                return maxParamsIndex;
-            }
-
             return resolveErrorCall(node);
 
             function chooseOverload(candidates: Signature[], relation: Map<RelationComparisonResult>, signatureHelpTrailingComma = false) {
                 candidateForArgumentError = undefined;
                 candidateForTypeArgumentError = undefined;
-                for (let candidatesIndex = 0; candidatesIndex < candidates.length; candidatesIndex++) {
-                    const originalCandidate = candidates[candidatesIndex];
+                for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
+                    const originalCandidate = candidates[candidateIndex];
                     if (!hasCorrectArity(node, args, originalCandidate, signatureHelpTrailingComma)) {
                         continue;
                     }
@@ -15721,7 +15702,7 @@ namespace ts {
                         }
                         const index = excludeArgument ? indexOf(excludeArgument, /*value*/ true) : -1;
                         if (index < 0) {
-                            candidates[candidatesIndex] = candidate;
+                            candidates[candidateIndex] = candidate;
                             return candidate;
                         }
                         excludeArgument[index] = false;
@@ -15731,6 +15712,24 @@ namespace ts {
                 return undefined;
             }
 
+        }
+
+        function getBestCandidateIndex(candidates: Signature[], argsCount: number): number {
+            let maxParamsIndex = -1;
+            let maxParams = -1;
+
+            for (let i = 0; i < candidates.length; i++) {
+                const candidate = candidates[i];
+                if (candidate.hasRestParameter || candidate.parameters.length >= argsCount) {
+                    return i;
+                }
+                if (candidate.parameters.length > maxParams) {
+                    maxParams = candidate.parameters.length;
+                    maxParamsIndex = i;
+                }
+            }
+
+            return maxParamsIndex;
         }
 
         function resolveCallExpression(node: CallExpression, candidatesOutArray: Signature[]): Signature {
